@@ -10,6 +10,7 @@ Welcome to the official web utilities portal of **TheKikGen Labs**. This reposit
     *   **Firmware Analyzer:** Instantly slices and parses the first 64 KB header and EOF trailers of official or custom `.img` / `.bin` containers safely, without overloading system RAM even with multi-gigabyte files.
     *   **RootFS Explorer & Hex Inspector:** Provides built-in visual inspection components to navigate inner file systems and analyze raw hex streams of payload binaries.
     *   **Container Builder & Exporters:** Houses front-end controllers to configure new firmware images alongside native Python/Bash CLI standalone exporters.
+<img width="1427" height="844" alt="image" src="https://github.com/user-attachments/assets/75143cb9-759f-4a83-aab3-e81a4e095f34" />
 
 ### 🎵 USBMIDIKLIK eco system (project at https://github.com/TheKikGen/USBMidiKliK4x4)
 
