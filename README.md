@@ -1,6 +1,6 @@
 # TheKikGen.github.io
 
-Welcome to the official web utilities portal of **TheKikGen Labs**. This repository hosts a collection of pure client-side, browser-based tools leveraging modern Web APIs like **Web MIDI** and **WebHID** to interface, configure, and debug DIY hardware music projects, MIDI gear, and advanced sequencers.
+Welcome to the official web utilities portal of **TheKikGen Labs**. This repository hosts a collection of pure client-side, browser-based tools leveraging modern Web APIs like **Web MIDI**, **WebHID**, and **Web Serial** to interface, configure, and debug DIY hardware music projects, MIDI gear, and advanced sequencers.
 
 🌐 **Live Access:** [https://github.io](https://github.io)
 
@@ -8,8 +8,12 @@ Welcome to the official web utilities portal of **TheKikGen Labs**. This reposit
 
 ## 🛠️ Available Web Tools & Utilities
 
+### 🤖 MPC Standalone Utilities (Akai Ecosystem)
+The sub-folder `/MPC` hosts web-based companion tools for Akai Standalone devices (MPC Live, Live II, X, One, Key, and Force) running custom firmware, SSH, or specific setups:
+* **[MPC Web Tools & Modules](https://github.io/MPC/)** – Web interfaces and scripts tailored to manage, explore, and tweak the embedded Linux environment of your Akai MPC or Force. Works in tandem with projects like *MPC-LiveXplore*.
+
 ### 🎛️ [umk4x4-Configurator.html](https://github.io/umk4x4-Configurator.html)
-The dedicated graphical configuration interface for the **[USBMidiKliK4x4 (UMK4x4)](https://github.com/TheKikGen/USBMidiKliK4x4)** project (the multi-port USB MIDI interface for STM32F103/Bluepill boards). It allows you to visually configure complex MIDI routing tables, filters, pipes, and standalone behaviors over MIDI SysEx.
+The dedicated graphical configuration interface for the **[USBMidiKliK4x4 (UMK4x4)](https://github.com)** project (the multi-port USB MIDI interface for STM32F103/Bluepill boards). It allows you to visually configure complex MIDI routing tables, filters, pipes, and standalone behaviors over MIDI SysEx.
 
 ### 📝 [MidiSysExUtility.html](https://github.io/MidiSysExUtility.html)
 A lightweight standalone web utility designed to send, receive, and analyze **MIDI System Exclusive (SysEx)** messages. Ideal for backing up firmware dumps, restoring presets, or debugging custom SysEx implementations on synthesizers and controllers.
@@ -27,9 +31,9 @@ A diagnostic monitoring tool leveraging the **Web MIDI API** to discover hardwar
 
 ## 🚀 Key Features
 
-* **Zero Installation:** Every tool runs 100% locally in your web browser. No external drivers, Node.js setups, or software installs required.
+* **Zero Installation:** Every tool runs 100% locally in your web browser. No external drivers, Node.js setups, or desktop installations required.
 * **Privacy Focused:** Your data, configuration dumps, and MIDI streams never leave your machine—no remote server interactions.
-* **Hardware Friendly:** Tailored explicitly to complement other open-source projects hosted under [TheKikGen GitHub profile](https://github.com/TheKikGen) (such as *USBMidiKliK*, *MPC-LiveXplore*, and custom STM32 utilities).
+* **Hardware Friendly:** Tailored explicitly to complement other open-source projects hosted under [TheKikGen GitHub profile](https://github.com) (such as *USBMidiKliK*, *MPC-LiveXplore*, and custom STM32 utilities).
 
 ## 📋 Requirements & Browser Support
 
@@ -42,14 +46,14 @@ To interact with physical hardware devices, these tools require native access to
 
 ---
 
-## 🤝 Related Projects
+## 🤝 Related Main Projects
 
 Check out the core hardware firmware and hacks that these web tools interact with:
-* 🎚️ **[USBMidiKliK4x4](https://github.com/TheKikGen/USBMidiKliK4x4)** - Multi-port USB MIDI interface for STM32F103.
-* 🤖 **[MPC-LiveXplore](https://github.com/TheKikGen/MPC-LiveXplore)** - Custom standalone software hacks, mods, and embedded tools for the Akai MPC & Force ecosystem.
+* 🎚️ **[USBMidiKliK4x4](https://github.com)** - Multi-port USB MIDI interface for STM32F103.
+* 🤖 **[MPC-LiveXplore](https://github.com/MPC-LiveXplore)** - Custom standalone software hacks, mods, toolkit, and tools for the Akai MPC & Force ecosystem.
 
 ---
 
-## 📄 License
+## 📄 License & Issues
 
 This repository and its web-facing tools are maintained by **TheKikGen Labs**. Feel free to explore the source code directly or open an issue on the tracker if you encounter any bugs.
