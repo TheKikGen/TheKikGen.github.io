@@ -2,29 +2,30 @@
 
 Welcome to the official web utilities portal of **TheKikGen Labs**. This repository hosts a collection of pure client-side, browser-based tools leveraging modern Web APIs like **Web MIDI**, **WebHID**, and **Web Serial** to interface, configure, and debug DIY hardware music projects, MIDI gear, and advanced sequencers.
 
-🌐 **Live Access:** [https://github.io](https://github.io)
-
 ---
 
-## 🛠️ Available Web Tools & Utilities
+### 🎛️ MPC Standalone Utilities (Akai MPC & Force Ecosystem)
 
-### 🤖 MPC Standalone Utilities (Akai Ecosystem)
-The sub-folder `/MPC` hosts web-based companion tools for Akai Standalone devices (MPC Live, Live II, X, One, Key, and Force) running custom firmware, SSH, or specific setups:
-* **[MPC Web Tools & Modules](https://github.io/MPC/)** – Web interfaces and scripts tailored to manage, explore, and tweak the embedded Linux environment of your Akai MPC or Force. Works in tandem with projects like *MPC-LiveXplore*.
+*   **[INMUSIC AZ01 CONTAINER SUITE](https://TheKikGen.github.io/MPC/inmusic_az01_container_suite.html)** – An advanced, memory-safe firmware image analyzer and workspace utility. It features a standalone, browser-based user interface using a pseudo-mount layout and embedded C-WASM XZ decompression to let you audit and extract update packages directly from your browser (see all projects at https://github.com/TheKikGen/MPC-LiveXplore).
+    *   **Firmware Analyzer:** Instantly slices and parses the first 64 KB header and EOF trailers of official or custom `.img` / `.bin` containers safely, without overloading system RAM even with multi-gigabyte files.
+    *   **RootFS Explorer & Hex Inspector:** Provides built-in visual inspection components to navigate inner file systems and analyze raw hex streams of payload binaries.
+    *   **Container Builder & Exporters:** Houses front-end controllers to configure new firmware images alongside native Python/Bash CLI standalone exporters.
 
-### 🎛️ [umk4x4-Configurator.html](https://github.io/umk4x4-Configurator.html)
-The dedicated graphical configuration interface for the **[USBMidiKliK4x4 (UMK4x4)](https://github.com)** project (the multi-port USB MIDI interface for STM32F103/Bluepill boards). It allows you to visually configure complex MIDI routing tables, filters, pipes, and standalone behaviors over MIDI SysEx.
+### 🎵 USBMIDIKLIK eco system (project at https://github.com/TheKikGen/USBMidiKliK4x4)
 
-### 📝 [MidiSysExUtility.html](https://github.io/MidiSysExUtility.html)
+*   **[umk4x4-Configurator.html](https://TheKikGen.github.io/umk4x4-Configurator.html**
+The dedicated graphical configuration interface for the **[USBMidiKliK4x4 (UMK4x4)](https://github.com/TheKikGen/USBMidiKliK4x4)** project (the multi-port USB MIDI interface for STM32F103/Bluepill boards). It allows you to visually configure complex MIDI routing tables, filters, pipes, and standalone behaviors over MIDI SysEx.
+
+*   **[MidiSysExUtility.html](https://TheKikGen.github.io/MidiSysExUtility.html)**
 A lightweight standalone web utility designed to send, receive, and analyze **MIDI System Exclusive (SysEx)** messages. Ideal for backing up firmware dumps, restoring presets, or debugging custom SysEx implementations on synthesizers and controllers.
 
-### 🔌 [tkg-hid-webcli.html](https://github.io/tkg-hid-webcli.html)
+*   **[tkg-hid-webcli.html](https://TheKikGen.github.io/tkg-hid-webcli.html)**
 A browser-based Human Interface Device (HID) command-line interface helper. It utilizes the native **WebHID API** to talk directly to compatible USB HID bootloaders and hardware (such as the `stm32-tkg-hid-bootloader`) for low-level configuration and firmware updates without requiring native desktop software.
 
-### 💻 [SerialTerm.html](https://github.io/SerialTerm.html)
+*   **[SerialTerm.html](https://TheKikGen.github.io/SerialTerm.html)**
 A simple, portable **Web Serial terminal** running entirely in your browser. Connect directly to microcontrollers (STM32, Arduino, ESP32) via USB-to-UART bridges or native CDC serial ports at standard baud rates (e.g., 115200) to view debug logs or interactive menus.
 
-### 🎵 [webmidi.html](https://github.io/webmidi.html)
+*   **[webmidi.html](https://TheKikGen.github.io/webmidi.html)**
 A diagnostic monitoring tool leveraging the **Web MIDI API** to discover hardware MIDI input/output ports connected to your system, test low-level message flows, and log raw MIDI streams in real time.
 
 ---
