@@ -20,7 +20,7 @@ The dedicated graphical configuration interface for the **[USBMidiKliK4x4 (UMK4x
 A lightweight standalone web utility designed to send, receive, and analyze **MIDI System Exclusive (SysEx)** messages. Ideal for backing up firmware dumps, restoring presets, or debugging custom SysEx implementations on synthesizers and controllers.
 
 *   **[tkg-hid-webcli.html](https://TheKikGen.github.io/tkg-hid-webcli.html)**
-A browser-based Human Interface Device (HID) command-line interface helper. It utilizes the native **WebHID API** to talk directly to compatible USB HID bootloaders and hardware (such as the `stm32-tkg-hid-bootloader`) for low-level configuration and firmware updates without requiring native desktop software.
+A browser-based Human Interface Device (HID) command-line interface helper. It utilizes the native **WebHID API** to talk directly to the TKG HID bootloader (https://github.com/TheKikGen/stm32-tkg-hid-bootloader) for low-level configuration and devices firmware updates without requiring native desktop software.
 
 *   **[SerialTerm.html](https://TheKikGen.github.io/SerialTerm.html)**
 A simple, portable **Web Serial terminal** running entirely in your browser. Connect directly to microcontrollers (STM32, Arduino, ESP32) via USB-to-UART bridges or native CDC serial ports at standard baud rates (e.g., 115200) to view debug logs or interactive menus.
