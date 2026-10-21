@@ -1917,21 +1917,50 @@
       if (f) { builderPayloadFile = f; document.getElementById('build-payload-name').textContent = f.name; }
     }
     async function generateCustomContainer() {
-      if (!builderPayloadFile) return;
+      if (!builderPayloadFile) {
+        showToast("Please select or synthesize a payload file first.", "error");
+        return;
+      }
       const cfg = {
-        version: document.getElementById('build-version').value,
-        description: document.getElementById('build-desc').value,
-        partitionName: document.getElementById('build-partname').value,
-        compression: document.getElementById('build-comp').value,
+        version: document.getElementById("build-version").value,
+        description: document.getElementById("build-desc").value,
+        partitionName: document.getElementById("build-partname").value,
+        compression: document.getElementById("build-comp").value,
         targets: builderTargets
       };
-      const outName = document.getElementById('build-outname').value.trim() || 'update_custom.img';
-      const { blob } = await packAz01Container(cfg, builderPayloadFile);
+      const outName = document.getElementById("build-outname").value.trim() || "update_custom.img";
+      const { blob, sha1Hex, partlOffset, payloadOffset } = await packAz01Container(cfg, builderPayloadFile);
+      lastBuiltContainerFile = new File([blob], outName, { type: "application/octet-stream" });
+
+      const rtCard = document.getElementById("build-roundtrip-card");
+      const rtInfo = document.getElementById("build-roundtrip-info");
+      if (rtCard && rtInfo) {
+        rtCard.classList.remove("hidden");
+        rtInfo.innerHTML = [
+          "<div>File: <strong class=\"text-white\">" + outName + "</strong> (" + formatBytes(blob.size) + ")</div>",
+          "<div>PARTL: <strong class=\"text-amber-400\">0x" + partlOffset.toString(16).toUpperCase() + "</strong> · Payload: <strong class=\"text-emerald-400\">0x" + payloadOffset.toString(16).toUpperCase() + "</strong></div>",
+          "<div>SHA-1: <strong class=\"text-zinc-200\">" + sha1Hex + "</strong></div>"
+        ].join("");
+      }
+
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = outName;
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
-      showToast(`Generated "${outName}"`, 'success');
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = outName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast("Generated \"" + outName + "\" (" + formatBytes(blob.size) + ")", "success");
+    }
+
+    async function inspectLastBuiltContainer() {
+      if (!lastBuiltContainerFile) {
+        showToast("Build a container image first.", "error");
+        return;
+      }
+      switchTab("analyze");
+      await analyzeFirmwareFile(lastBuiltContainerFile, false);
     }
 
     function loadActivePayloadIntoXzBench() {
@@ -1952,18 +1981,21 @@
     }
     function renderXzBenchResult(modeLabel, res) {
       const box = document.getElementById("xz-bench-result");
+      if (!box) return;
       box.classList.remove("hidden");
       const ratio = res.inputSize > 0 ? ((res.outputSize / res.inputSize) * 100).toFixed(1) : "100.0";
-      document.getElementById("xz-bench-stats").innerHTML = [
+      box.innerHTML = [
         "<div class=\"flex justify-between py-1 border-b border-zinc-900\"><span>Operation</span><span class=\"text-emerald-400\">" + modeLabel + "</span></div>",
         "<div class=\"flex justify-between py-1 border-b border-zinc-900\"><span>Output Stream</span><span class=\"text-white\">" + res.fileName + "</span></div>",
         "<div class=\"flex justify-between py-1 border-b border-zinc-900\"><span>Input → Output Size</span><span class=\"text-zinc-200\">" + formatBytes(res.inputSize) + " → " + formatBytes(res.outputSize) + " (" + ratio + "%)</span></div>",
-        "<div class=\"flex justify-between py-1\"><span>IEEE 802.3 CRC32</span><span class=\"text-amber-400\">0x" + res.crc32Hex + "</span></div>"
+        "<div class=\"flex justify-between py-1 border-b border-zinc-900\"><span>IEEE 802.3 CRC32</span><span class=\"text-amber-400\">0x" + res.crc32Hex + "</span></div>",
+        "<div class=\"pt-2 flex justify-end\"><button type=\"button\" onclick=\"downloadLastXzBenchResult()\" class=\"px-3 py-1.5 bg-[#dc2626] hover:bg-[#b91c1c] text-white text-xs font-semibold rounded cursor-pointer\">Download " + res.fileName + "</button></div>"
       ].join("");
     }
     async function runXzBenchCompress() {
       if (!xzBenchFile) { showToast("Select or load a partition file first.", "error"); return; }
-      const lvl = Number(document.getElementById("xz-preset-select").value) || 6;
+      const presetEl = document.getElementById("xz-bench-preset");
+      const lvl = presetEl ? (Number(presetEl.value) || 6) : 6;
       lastXzBenchRes = await compressToXzStream(xzBenchFile, xzBenchFile.name, lvl);
       renderXzBenchResult("LZMA2 Compress (Preset -" + lvl + ")", lastXzBenchRes);
       showToast("Compressed to " + lastXzBenchRes.fileName + " (CRC32 0x" + lastXzBenchRes.crc32Hex + ")", "success");
@@ -1993,25 +2025,35 @@
     let activeCCompanionTab = "c";
     function switchCCompanionTab(tab) {
       activeCCompanionTab = tab;
-      const btnC = document.getElementById("c-tab-c");
+      const btnC = document.getElementById("c-tab-src");
       const btnMake = document.getElementById("c-tab-make");
+      const dlBtn = document.getElementById("c-download-btn");
       if (btnC && btnMake) {
-        btnC.className = tab === "c" ? "px-2.5 py-1 text-xs font-mono rounded bg-[#dc2626] text-white cursor-pointer" : "px-2.5 py-1 text-xs font-mono rounded text-zinc-400 hover:text-white cursor-pointer";
-        btnMake.className = tab === "makefile" ? "px-2.5 py-1 text-xs font-mono rounded bg-[#dc2626] text-white cursor-pointer" : "px-2.5 py-1 text-xs font-mono rounded text-zinc-400 hover:text-white cursor-pointer";
+        btnC.className = tab === "c" ? "px-3 py-1 text-xs font-mono font-medium rounded bg-[#dc2626] text-white cursor-pointer" : "px-3 py-1 text-xs font-mono font-medium rounded text-zinc-400 hover:text-white cursor-pointer";
+        btnMake.className = tab === "makefile" ? "px-3 py-1 text-xs font-mono font-medium rounded bg-[#dc2626] text-white cursor-pointer" : "px-3 py-1 text-xs font-mono font-medium rounded text-zinc-400 hover:text-white cursor-pointer";
       }
-      document.getElementById("c-companion-code-view").textContent = tab === "c" ? C_COMPANION_SOURCE_CODE : C_COMPANION_MAKEFILE;
+      if (dlBtn) {
+        dlBtn.textContent = tab === "c" ? "Download az01_xz_companion.c" : "Download Makefile";
+      }
+      const codeView = document.getElementById("c-companion-code-view");
+      if (codeView) {
+        codeView.textContent = tab === "c" ? C_COMPANION_SOURCE_CODE : C_COMPANION_MAKEFILE;
+      }
     }
     async function probeLocalCBridge() {
+      const urlInput = document.getElementById("xz-bridge-url");
+      const base = (urlInput && urlInput.value ? urlInput.value.trim() : "http://127.0.0.1:8765").replace(/\/+$/, "");
+      const badge = document.getElementById("xz-engine-status-badge");
       try {
-        const res = await fetch("http://127.0.0.1:18089/status", { method: "GET" });
+        const res = await fetch(base + "/health", { method: "GET" });
         if (res.ok) {
-          document.getElementById("c-bridge-status-text").textContent = "Native C HTTP Daemon (127.0.0.1:18089) Connected";
-          showToast("Connected to local az01_xz_companion daemon on 127.0.0.1:18089", "success");
+          if (badge) badge.textContent = "Native C HTTP Daemon Connected";
+          showToast("Connected to local az01_xz_companion daemon at " + base, "success");
           return;
         }
       } catch (e) {}
-      document.getElementById("c-bridge-status-text").textContent = "Embedded C-WASM Core Ready (Zero-Install)";
-      showToast("Embedded C-WASM Core active (native daemon on 127.0.0.1:18089 not detected).", "info");
+      if (badge) badge.textContent = "Embedded C-WASM Active";
+      showToast("Embedded C-WASM Core active (native daemon at " + base + " not detected).", "info");
     }
     async function copyCCompanionCode() {
       const code = activeCCompanionTab === "c" ? C_COMPANION_SOURCE_CODE : C_COMPANION_MAKEFILE;
@@ -2045,16 +2087,22 @@
     }
     function renderHexView() {
       if (!activeMetadata) return;
-      const winSize = Number(document.getElementById("hex-window-size").value) || 512;
+      const winEl = document.getElementById("hex-window-size");
+      const winSize = winEl ? (Number(winEl.value) || 512) : 512;
       const limit = Math.min(activeMetadata.headerBuffer.byteLength, winSize);
       const bytes = new Uint8Array(activeMetadata.headerBuffer, 0, limit);
       const regions = activeMetadata.regions || [];
 
+      const subEl = document.getElementById("hex-subtitle");
+      if (subEl) {
+        subEl.textContent = activeMetadata.fileName + " · PARTL @ 0x" + activeMetadata.detectedPartlOffset.toString(16).toUpperCase() + " · Payload @ 0x" + activeMetadata.payloadOffset.toString(16).toUpperCase();
+      }
+
       const jumpBar = document.getElementById("hex-jump-bar");
       if (jumpBar) {
         jumpBar.innerHTML = regions.map(r => {
-          const st = REGION_STYLES[r.color] || REGION_STYLES.slate;
-          return "<button type=\"button\" onclick=\"selectHexByte(" + r.start + ")\" class=\"px-2.5 py-1 rounded border text-[11px] font-mono cursor-pointer transition-colors " + st.bg + " " + st.text + " " + st.border + "\">" + r.label + " (0x" + r.start.toString(16).toUpperCase().padStart(2, "0") + ")</button>";
+          const st = REGION_STYLES[r.type] || REGION_STYLES.payload;
+          return "<button type=\"button\" onclick=\"selectHexByte(" + r.start + ")\" class=\"px-2.5 py-1 rounded border border-zinc-800 text-[11px] font-mono cursor-pointer transition-colors " + st.bg + " " + st.text + "\">" + r.label + " (0x" + r.start.toString(16).toUpperCase().padStart(2, "0") + ")</button>";
         }).join("");
       }
 
@@ -2063,13 +2111,11 @@
       const telemetryBar = document.getElementById("hex-telemetry-bar");
       if (telemetryBar) {
         telemetryBar.innerHTML = [
-          "<div class=\"flex flex-wrap items-center gap-4\">",
-          "<span>OFFSET: <strong class=\"text-white\">0x" + hexSelectedOffset.toString(16).toUpperCase().padStart(4, "0") + "</strong> (" + hexSelectedOffset + ")</span>",
-          "<span>HEX: <strong class=\"text-amber-400\">0x" + selByte.toString(16).toUpperCase().padStart(2, "0") + "</strong></span>",
-          "<span>UINT8: <strong class=\"text-zinc-200\">" + selByte + "</strong></span>",
-          "<span>BIN: <strong class=\"text-zinc-400\">" + selByte.toString(2).padStart(8, "0") + "</strong></span>",
-          "</div>",
-          "<div class=\"text-zinc-300\">" + (selReg ? ("<span class=\"text-red-400 font-semibold\">[" + selReg.label + "]</span> — " + selReg.description) : "Unmapped Header Padding / Alignment") + "</div>"
+          "<div><span class=\"text-zinc-500\">OFFSET:</span> <strong class=\"text-white\">0x" + hexSelectedOffset.toString(16).toUpperCase().padStart(4, "0") + "</strong> (" + hexSelectedOffset + ")</div>",
+          "<div><span class=\"text-zinc-500\">HEX:</span> <strong class=\"text-amber-400\">0x" + selByte.toString(16).toUpperCase().padStart(2, "0") + "</strong></div>",
+          "<div><span class=\"text-zinc-500\">UINT8:</span> <strong class=\"text-zinc-200\">" + selByte + "</strong></div>",
+          "<div><span class=\"text-zinc-500\">BIN:</span> <strong class=\"text-zinc-400\">" + selByte.toString(2).padStart(8, "0") + "</strong></div>",
+          "<div class=\"sm:col-span-2 truncate\"><span class=\"text-zinc-500\">REGION:</span> " + (selReg ? ("<strong class=\"text-red-400\">" + selReg.label + "</strong> — <span class=\"text-zinc-300\">" + selReg.description + "</span>") : "<span class=\"text-zinc-400\">8-Byte Alignment / Padding</span>") + "</div>"
         ].join("");
       }
 
@@ -2085,7 +2131,7 @@
           }
           const b = bytes[off];
           const reg = findRegionForOffset(off, regions);
-          const st = reg ? (REGION_STYLES[reg.color] || REGION_STYLES.slate) : null;
+          const st = reg ? (REGION_STYLES[reg.type] || REGION_STYLES.payload) : null;
           const isSel = off === hexSelectedOffset;
           const cls = isSel
             ? "bg-[#dc2626] text-white font-bold ring-1 ring-white"
@@ -2114,242 +2160,264 @@
     let generatedPythonScript = "";
     let generatedBashScript = "";
 
+    function escapeForJsQuoted(str) {
+      return String(str || "")
+        .replace(/\\/g, "\\\\")
+        .replace(/"/g, "\\\"")
+        .replace(/\r/g, "\\r")
+        .replace(/\n/g, "\\n");
+    }
+
     function buildEscapedPythonScript(m) {
-      const fileName = m.fileName || "MPC-update.img";
-      const version = m.version || "3.4.1.62";
-      const partlOffset = m.partlOffset || 224;
-      const payloadOffset = m.payloadOffset || 300;
+      const fileName = m.fileName || "MPC-3.4.1.62-Unified-update.img";
+      const version = m.version || "3.4.1.62-MPC-RELEASE";
+      const description = m.description || "upgrade image";
+      const partlOffset = (m.detectedPartlOffset !== undefined ? m.detectedPartlOffset : m.partlOffset) || 224;
+      const payloadOffset = m.payloadOffset || (partlOffset + 0x4C);
       const payloadSize = m.payloadSize || 4096;
       const partitionName = m.partitionName || "rootfs";
       const compression = m.compression || "xz";
-      const expectedSha1 = m.expectedHashHex || "0000000000000000000000000000000000000000";
-      const targetsRepr = (m.targets && m.targets.length ? m.targets : ["inmusic,acva2"]).map(t => "\"" + t.replace(/\\/g, "\\\\").replace(/"/g, "\\\"") + "\"").join(", ");
-      const outExt = compression === "none" ? "img" : compression;
+      const expectedSha1 = m.expectedHash || m.expectedHashHex || "da39a3ee5e6b4b0d3255bfef95601890afd80709";
+      const targetsJoined = (m.targets && m.targets.length ? m.targets : ["inmusic,acv5", "inmusic,acv8", "inmusic,acva", "inmusic,acva2", "inmusic,acvb", "inmusic,acvm", "inmusic,acvr", "inmusic,acv5s"]).join(",");
+      const partlHex = "0x" + partlOffset.toString(16).toUpperCase();
+      const payloadHex = "0x" + payloadOffset.toString(16).toUpperCase();
 
       return [
         "#!/usr/bin/env python3",
         "# -*- coding: utf-8 -*-",
         "\"\"\"",
-        "INMUSIC AZ01 CONTAINER SUITE — by The KikGen Labs",
-        "Automated AZ01 / PARTL Firmware Container Inspector, Extractor & Re-Packer",
-        "Pre-configured for: " + fileName + " (v" + version + ")",
+        "INMUSIC AZ01 CONTAINER SUITE — CLI Automation Utility",
+        "Generated by The KikGen Labs Firmware Toolkit",
+        "Active Profile: " + fileName + " (Version: " + version + ")",
         "\"\"\"",
         "",
-        "import sys",
+        "import hashlib",
         "import os",
         "import struct",
-        "import hashlib",
-        "import argparse",
+        "import sys",
         "",
-        "# Active Firmware Telemetry Constants",
-        "DEFAULT_IMAGE = \"" + fileName.replace(/\\/g, "\\\\").replace(/"/g, "\\\"") + "\"",
-        "EXPECTED_VERSION = \"" + version.replace(/\\/g, "\\\\").replace(/"/g, "\\\"") + "\"",
-        "PARTL_OFFSET = 0x" + partlOffset.toString(16).toUpperCase(),
-        "PAYLOAD_OFFSET = 0x" + payloadOffset.toString(16).toUpperCase(),
-        "PAYLOAD_SIZE = " + payloadSize,
-        "PARTITION_NAME = \"" + partitionName.replace(/\\/g, "\\\\").replace(/"/g, "\\\"") + "\"",
-        "COMPRESSION = \"" + compression.replace(/\\/g, "\\\\").replace(/"/g, "\\\"") + "\"",
-        "EXPECTED_SHA1 = \"" + expectedSha1 + "\"",
-        "TARGETS = [" + targetsRepr + "]",
-        "OFFICIAL_TRAILER = b\"EOF\\x10\\x00\\x00\\x00\"",
+        "# Pre-populated parameters from active firmware session",
+        "DEFAULT_IMAGE = \"" + escapeForJsQuoted(fileName) + "\"",
+        "EXPECTED_PARTL_OFFSET = " + partlHex,
+        "EXPECTED_PAYLOAD_OFFSET = " + payloadHex,
+        "EXPECTED_PAYLOAD_SIZE = " + String(payloadSize),
+        "EXPECTED_SHA1 = \"" + escapeForJsQuoted(expectedSha1) + "\"",
+        "DEFAULT_TARGETS = \"" + escapeForJsQuoted(targetsJoined) + "\".split(\",\")",
+        "DEFAULT_VERSION = \"" + escapeForJsQuoted(version) + "\"",
+        "DEFAULT_DESC = \"" + escapeForJsQuoted(description) + "\"",
+        "DEFAULT_PART_NAME = \"" + escapeForJsQuoted(partitionName) + "\"",
+        "DEFAULT_COMPRESSION = \"" + escapeForJsQuoted(compression) + "\"",
+        "EOF_TRAILER = b\"EOF\\x10\\x00\\x00\\x00\"",
         "",
-        "def align8(val: int) -> int:",
-        "    return (val + 7) & ~7",
         "",
-        "def inspect_and_extract(image_path: str, output_dir: str = \"./extracted\"):",
-        "    if not os.path.isfile(image_path):",
-        "        print(f\"[!] Error: Firmware image '{image_path}' not found.\")",
+        "def analyze_and_extract(img_path: str, extract_out: str = None) -> None:",
+        "    with open(img_path, \"rb\") as f:",
+        "        header = f.read(65536)",
+        "",
+        "    if header[:4] != b\"AZ01\":",
+        "        raise ValueError(f\"Invalid magic {header[:4]!r}; expected b'AZ01'\")",
+        "",
+        "    partl_offset = header.find(b\"PARTL\")",
+        "    if partl_offset < 0:",
+        "        raise ValueError(\"Could not locate PARTL descriptor in first 64 KB\")",
+        "",
+        "    payload_offset = partl_offset + 0x4C",
+        "    ver_raw = header[0x10:0x28].split(b\"\\x00\", 1)[0].decode(\"utf-8\", \"replace\")",
+        "    target_count = struct.unpack_from(\"<I\", header, 0x28)[0]",
+        "",
+        "    ptr = 0x2C",
+        "    targets = []",
+        "    for _ in range(target_count):",
+        "        t_len = struct.unpack_from(\"<I\", header, ptr)[0]",
+        "        ptr += 4",
+        "        t_str = header[ptr : ptr + t_len].split(b\"\\x00\", 1)[0].decode(\"utf-8\", \"replace\")",
+        "        targets.append(t_str)",
+        "        ptr += 16",
+        "",
+        "    payload_size = struct.unpack_from(\"<Q\", header, partl_offset + 0x08)[0]",
+        "    part_name = header[partl_offset + 0x14 : partl_offset + 0x20].split(b\"\\x00\", 1)[0].decode()",
+        "    comp_type = header[partl_offset + 0x20 : partl_offset + 0x2C].split(b\"\\x00\", 1)[0].decode()",
+        "    expected_sha1 = header[partl_offset + 0x38 : partl_offset + 0x4C].hex()",
+        "",
+        "    print(f\"[+] Container Magic : AZ01\")",
+        "    print(f\"[+] Firmware Version: {ver_raw}\")",
+        "    print(f\"[+] Targets ({target_count:2d})    : {', '.join(targets)}\")",
+        "    print(f\"[+] PARTL Offset    : 0x{partl_offset:04X}\")",
+        "    print(f\"[+] Payload Offset  : 0x{payload_offset:04X}\")",
+        "    print(f\"[+] Partition       : {part_name} ({comp_type}), {payload_size} bytes\")",
+        "    print(f\"[+] Expected SHA-1  : {expected_sha1}\")",
+        "",
+        "    sha1 = hashlib.sha1()",
+        "    out_file = open(extract_out, \"wb\") if extract_out else None",
+        "",
+        "    with open(img_path, \"rb\") as f:",
+        "        f.seek(payload_offset)",
+        "        remaining = payload_size",
+        "        while remaining > 0:",
+        "            chunk = f.read(min(1024 * 1024, remaining))",
+        "            if not chunk:",
+        "                break",
+        "            sha1.update(chunk)",
+        "            if out_file:",
+        "                out_file.write(chunk)",
+        "            remaining -= len(chunk)",
+        "",
+        "    if out_file:",
+        "        out_file.close()",
+        "        print(f\"[+] Extracted stream: {extract_out}\")",
+        "",
+        "    calc_sha1 = sha1.hexdigest()",
+        "    print(f\"[+] Calculated SHA-1: {calc_sha1}\")",
+        "    if calc_sha1.lower() == expected_sha1.lower():",
+        "        print(\"[✓] INTEGRITY VERIFIED: Checksum matches PARTL header.\")",
+        "    else:",
+        "        print(\"[!] INTEGRITY ERROR: Checksum mismatch!\")",
         "        sys.exit(1)",
         "",
-        "    os.makedirs(output_dir, exist_ok=True)",
         "",
-        "    with open(image_path, \"rb\") as f:",
-        "        header = f.read(65536)",
-        "        magic = header[0:4].decode(\"ascii\", errors=\"replace\")",
-        "        if magic != \"AZ01\":",
-        "            raise ValueError(f\"Invalid container magic: {magic} (expected AZ01)\")",
-        "",
-        "        format_rev, partl_ptr, ver_len = struct.unpack_from(\"<III\", header, 0x04)",
-        "        version_str = header[0x10:0x10 + min(ver_len, 24)].split(b\"\\x00\")[0].decode(\"ascii\", errors=\"replace\")",
-        "",
-        "        print(f\"[+] Container Magic  : {magic} (Rev {format_rev})\")",
-        "        print(f\"[+] Firmware Version : {version_str}\")",
-        "        print(f\"[+] PARTL Offset     : 0x{partl_ptr:08X}\")",
-        "",
-        "        partl_sig = header[partl_ptr:partl_ptr + 5].decode(\"ascii\", errors=\"replace\")",
-        "        if partl_sig != \"PARTL\":",
-        "            raise ValueError(f\"Corrupt PARTL signature at 0x{partl_ptr:X}: {partl_sig}\")",
-        "",
-        "        payload_len = struct.unpack_from(\"<Q\", header, partl_ptr + 0x08)[0]",
-        "        part_name = header[partl_ptr + 0x14:partl_ptr + 0x20].split(b\"\\x00\")[0].decode(\"ascii\", errors=\"replace\")",
-        "        comp_type = header[partl_ptr + 0x20:partl_ptr + 0x2C].split(b\"\\x00\")[0].decode(\"ascii\", errors=\"replace\")",
-        "        expected_hash = header[partl_ptr + 0x38:partl_ptr + 0x4C].hex()",
-        "",
-        "        payload_start = partl_ptr + 0x4C",
-        "        print(f\"[+] Partition        : {part_name} ({comp_type})\")",
-        "        print(f\"[+] Payload Geometry : Start=0x{payload_start:X}, Size={payload_len} bytes\")",
-        "        print(f\"[+] Expected SHA-1   : {expected_hash}\")",
-        "",
-        "        out_ext = \"img\" if comp_type in (\"none\", \"\") else comp_type",
-        "        out_file = os.path.join(output_dir, f\"{part_name}.{out_ext}\")",
-        "",
-        "        f.seek(payload_start)",
-        "        sha1 = hashlib.sha1()",
-        "        remaining = payload_len",
-        "",
-        "        with open(out_file, \"wb\") as out_f:",
-        "            while remaining > 0:",
-        "                chunk = f.read(min(1024 * 1024, remaining))",
-        "                if not chunk:",
-        "                    break",
-        "                out_f.write(chunk)",
-        "                sha1.update(chunk)",
-        "                remaining -= len(chunk)",
-        "",
-        "        computed = sha1.hexdigest()",
-        "        print(f\"[+] Computed SHA-1   : {computed}\")",
-        "        if computed.lower() == expected_hash.lower():",
-        "            print(\"[✓] INTEGRITY VERIFIED: Payload SHA-1 matches PARTL header.\")",
-        "        else:",
-        "            print(\"[!] WARNING: SHA-1 MISMATCH DETECTED!\")",
-        "",
-        "        print(f\"[+] Extracted payload saved to: {out_file}\")",
-        "",
-        "def pack_az01_image(payload_path: str, output_image: str):",
+        "def pack_az01_image(payload_path: str, output_path: str) -> None:",
+        "    payload_size = os.path.getsize(payload_path)",
+        "    sha1 = hashlib.sha1()",
         "    with open(payload_path, \"rb\") as pf:",
-        "        payload_bytes = pf.read()",
+        "        while chunk := pf.read(1024 * 1024):",
+        "            sha1.update(chunk)",
+        "    digest_bytes = sha1.digest()",
         "",
-        "    sha1_digest = hashlib.sha1(payload_bytes).digest()",
         "    buf = bytearray(8192)",
         "    buf[0:4] = b\"AZ01\"",
         "    struct.pack_into(\"<I\", buf, 0x04, 1)",
-        "",
-        "    ver_bytes = EXPECTED_VERSION.encode(\"ascii\")[:24]",
+        "    ver_bytes = DEFAULT_VERSION.encode(\"utf-8\")[:24]",
         "    struct.pack_into(\"<I\", buf, 0x0C, len(ver_bytes))",
-        "    buf[0x10:0x10 + len(ver_bytes)] = ver_bytes",
+        "    buf[0x10 : 0x10 + len(ver_bytes)] = ver_bytes",
         "",
-        "    ptr = 0x28",
-        "    struct.pack_into(\"<I\", buf, ptr, len(TARGETS))",
-        "    ptr += 4",
-        "    for t in TARGETS:",
-        "        tb = t.encode(\"ascii\")[:16]",
+        "    struct.pack_into(\"<I\", buf, 0x28, len(DEFAULT_TARGETS))",
+        "    ptr = 0x2C",
+        "    for t in DEFAULT_TARGETS:",
+        "        tb = t.strip().encode(\"utf-8\")[:16]",
         "        struct.pack_into(\"<I\", buf, ptr, len(tb))",
-        "        buf[ptr + 4:ptr + 4 + len(tb)] = tb",
-        "        ptr += 20",
+        "        ptr += 4",
+        "        buf[ptr : ptr + len(tb)] = tb",
+        "        ptr += 16",
         "",
-        "    struct.pack_into(\"<I\", buf, ptr, len(TARGETS))",
+        "    struct.pack_into(\"<I\", buf, ptr, len(DEFAULT_TARGETS))",
         "    ptr += 4",
-        "    for i in range(len(TARGETS)):",
+        "    for i in range(len(DEFAULT_TARGETS)):",
         "        struct.pack_into(\"<I\", buf, ptr, 0x09E84000 + i)",
         "        ptr += 4",
         "",
-        "    desc = b\"upgrade image\"",
-        "    struct.pack_into(\"<I\", buf, ptr, len(desc))",
+        "    desc_bytes = DEFAULT_DESC.encode(\"utf-8\")",
+        "    struct.pack_into(\"<I\", buf, ptr, len(desc_bytes))",
         "    ptr += 4",
-        "    buf[ptr:ptr + len(desc)] = desc",
-        "    ptr = align8(ptr + len(desc))",
+        "    buf[ptr : ptr + len(desc_bytes)] = desc_bytes",
+        "    ptr += len(desc_bytes)",
         "",
-        "    partl_off = ptr",
-        "    struct.pack_into(\"<I\", buf, 0x08, partl_off)",
+        "    # 8-byte alignment",
+        "    partl_offset = (ptr + 7) & ~7",
+        "    struct.pack_into(\"<I\", buf, 0x08, partl_offset)",
         "",
-        "    buf[partl_off:partl_off + 5] = b\"PARTL\"",
-        "    struct.pack_into(\"<Q\", buf, partl_off + 0x08, len(payload_bytes))",
-        "    pname = PARTITION_NAME.encode(\"ascii\")[:11]",
-        "    ctype = COMPRESSION.encode(\"ascii\")[:11]",
-        "    buf[partl_off + 0x14:partl_off + 0x14 + len(pname)] = pname",
-        "    buf[partl_off + 0x20:partl_off + 0x20 + len(ctype)] = ctype",
-        "    buf[partl_off + 0x2C:partl_off + 0x30] = b\"sha1\"",
-        "    struct.pack_into(\"<I\", buf, partl_off + 0x34, 20)",
-        "    buf[partl_off + 0x38:partl_off + 0x4C] = sha1_digest",
+        "    buf[partl_offset : partl_offset + 5] = b\"PARTL\"",
+        "    struct.pack_into(\"<Q\", buf, partl_offset + 0x08, payload_size)",
+        "    pname_b = DEFAULT_PART_NAME.encode(\"utf-8\")[:11]",
+        "    comp_b = DEFAULT_COMPRESSION.encode(\"utf-8\")[:11]",
+        "    buf[partl_offset + 0x14 : partl_offset + 0x14 + len(pname_b)] = pname_b",
+        "    buf[partl_offset + 0x20 : partl_offset + 0x20 + len(comp_b)] = comp_b",
+        "    buf[partl_offset + 0x2C : partl_offset + 0x30] = b\"sha1\"",
+        "    struct.pack_into(\"<I\", buf, partl_offset + 0x34, 20)",
+        "    buf[partl_offset + 0x38 : partl_offset + 0x4C] = digest_bytes",
         "",
-        "    header_end = partl_off + 0x4C",
-        "    with open(output_image, \"wb\") as out:",
-        "        out.write(buf[:header_end])",
-        "        out.write(payload_bytes)",
-        "        out.write(OFFICIAL_TRAILER)",
+        "    header_end = partl_offset + 0x4C",
+        "    with open(output_path, \"wb\") as out_f:",
+        "        out_f.write(buf[:header_end])",
+        "        with open(payload_path, \"rb\") as pf:",
+        "            while chunk := pf.read(1024 * 1024):",
+        "                out_f.write(chunk)",
+        "        out_f.write(EOF_TRAILER)",
         "",
-        "    print(f\"[✓] Packed AZ01 container written to: {output_image} (SHA-1: {sha1_digest.hex()})\")",
+        "    print(f\"[✓] Packed AZ01 container -> {output_path} (PARTL @ 0x{partl_offset:04X})\")",
+        "",
         "",
         "if __name__ == \"__main__\":",
-        "    parser = argparse.ArgumentParser(description=\"inMusic AZ01 Firmware Utility\")",
-        "    parser.add_argument(\"image\", nargs=\"?\", default=DEFAULT_IMAGE, help=\"Path to AZ01 firmware image\")",
-        "    parser.add_argument(\"--pack\", metavar=\"PAYLOAD\", help=\"Pack a raw/xz payload into a new AZ01 container\")",
-        "    parser.add_argument(\"-o\", \"--out\", default=\"./extracted\", help=\"Output directory or file\")",
-        "    args = parser.parse_args()",
-        "    if args.pack:",
-        "        pack_az01_image(args.pack, args.out if args.out != \"./extracted\" else \"repacked_update.img\")",
-        "    else:",
-        "        inspect_and_extract(args.image, args.out)"
+        "    if len(sys.argv) < 2:",
+        "        print(f\"Usage: {sys.argv[0]} <analyze|extract|pack> [args...]\")",
+        "        sys.exit(0)",
+        "    cmd = sys.argv[1]",
+        "    if cmd == \"analyze\":",
+        "        analyze_and_extract(sys.argv[2] if len(sys.argv) > 2 else DEFAULT_IMAGE)",
+        "    elif cmd == \"extract\":",
+        "        analyze_and_extract(",
+        "            sys.argv[2] if len(sys.argv) > 2 else DEFAULT_IMAGE,",
+        "            sys.argv[3] if len(sys.argv) > 3 else f\"{DEFAULT_PART_NAME}.{DEFAULT_COMPRESSION}\",",
+        "        )",
+        "    elif cmd == \"pack\":",
+        "        pack_az01_image(sys.argv[2], sys.argv[3] if len(sys.argv) > 3 else \"update_custom.img\")"
       ].join("\n");
     }
 
     function buildEscapedBashScript(m) {
-      const fileName = m.fileName || "MPC-update.img";
-      const version = m.version || "3.4.1.62";
-      const partlOffset = m.partlOffset || 224;
-      const payloadOffset = m.payloadOffset || 300;
+      const fileName = m.fileName || "MPC-3.4.1.62-Unified-update.img";
+      const version = m.version || "3.4.1.62-MPC-RELEASE";
+      const partlOffset = (m.detectedPartlOffset !== undefined ? m.detectedPartlOffset : m.partlOffset) || 224;
+      const payloadOffset = m.payloadOffset || (partlOffset + 0x4C);
       const payloadSize = m.payloadSize || 4096;
       const partitionName = m.partitionName || "rootfs";
       const compression = m.compression || "xz";
-      const expectedSha1 = m.expectedHashHex || "0000000000000000000000000000000000000000";
-      const outExt = compression === "none" ? "img" : compression;
+      const expectedSha1 = m.expectedHash || m.expectedHashHex || "da39a3ee5e6b4b0d3255bfef95601890afd80709";
+      const outExt = compression === "none" ? "bin" : compression;
+      const partlHex = "0x" + partlOffset.toString(16).toUpperCase();
+      const payloadHex = "0x" + payloadOffset.toString(16).toUpperCase();
 
       return [
         "#!/usr/bin/env bash",
         "# ==============================================================================",
-        "# INMUSIC AZ01 CONTAINER SUITE — by The KikGen Labs",
-        "# Automated POSIX Shell Firmware Unpacker & Checksum Verifier",
-        "# Target Image : " + fileName,
-        "# Firmware Ver : " + version,
+        "# INMUSIC AZ01 CONTAINER SUITE — Bash Direct Slicer & Checksum Verifier",
+        "# Generated by The KikGen Labs Firmware Toolkit",
+        "# Active Image : " + fileName,
+        "# Version      : " + version,
         "# ==============================================================================",
         "set -euo pipefail",
         "",
-        "IMAGE=\"${1:-" + fileName.replace(/\\/g, "\\\\").replace(/"/g, "\\\"") + "}\"",
-        "PARTL_OFFSET=" + partlOffset,
-        "PAYLOAD_OFFSET=" + payloadOffset,
-        "PAYLOAD_SIZE=" + payloadSize,
-        "EXPECTED_SHA1=\"" + expectedSha1 + "\"",
-        "OUTPUT_FILE=\"" + partitionName.replace(/\\/g, "\\\\").replace(/"/g, "\\\"") + "." + outExt.replace(/\\/g, "\\\\").replace(/"/g, "\\\"") + "\"",
+        "IMAGE_FILE=\"${1:-" + escapeForJsQuoted(fileName) + "}\"",
+        "OUT_PAYLOAD=\"${2:-" + escapeForJsQuoted(partitionName) + "." + escapeForJsQuoted(outExt) + "}\"",
         "",
-        "echo \"==========================================================\"",
-        "echo \" INMUSIC AZ01 CONTAINER UNPACKER — by The KikGen Labs\"",
-        "echo \"==========================================================\"",
+        "PARTL_OFFSET=" + String(partlOffset) + "        # " + partlHex,
+        "PAYLOAD_OFFSET=" + String(payloadOffset) + "    # " + payloadHex,
+        "PAYLOAD_SIZE=" + String(payloadSize),
+        "EXPECTED_SHA1=\"" + escapeForJsQuoted(expectedSha1) + "\"",
         "",
-        "if [ ! -f \"$IMAGE\" ]; then",
-        "  echo \"[!] Error: Firmware file '$IMAGE' not found.\"",
+        "echo \"=== inMusic AZ01 Fast Shell Unpacker ===\"",
+        "echo \"Input Image    : ${IMAGE_FILE}\"",
+        "echo \"PARTL Offset   : ${PARTL_OFFSET} (" + partlHex + ")\"",
+        "echo \"Payload Offset : ${PAYLOAD_OFFSET} (" + payloadHex + ")\"",
+        "echo \"Payload Length : ${PAYLOAD_SIZE} bytes\"",
+        "",
+        "# Verify AZ01 magic bytes",
+        "MAGIC=$(dd if=\"${IMAGE_FILE}\" bs=1 count=4 status=none | tr -d '\\0')",
+        "if [[ \"${MAGIC}\" != \"AZ01\" ]]; then",
+        "  echo \"[!] Error: Invalid container magic '${MAGIC}' (expected AZ01)\" >&2",
         "  exit 1",
         "fi",
         "",
-        "MAGIC=$(dd if=\"$IMAGE\" bs=1 count=4 2>/dev/null || true)",
-        "if [ \"$MAGIC\" != \"AZ01\" ]; then",
-        "  echo \"[!] Invalid Magic Signature: '$MAGIC' (Expected 'AZ01')\"",
-        "  exit 1",
-        "fi",
+        "# Extract exact payload stream using dd (skip header bytes, read exact byte count)",
+        "echo \"[*] Slicing " + escapeForJsQuoted(partitionName) + " payload stream to ${OUT_PAYLOAD}...\"",
+        "dd if=\"${IMAGE_FILE}\" of=\"${OUT_PAYLOAD}\" iflag=skip_bytes,count_bytes \\",
+        "   bs=64K skip=\"${PAYLOAD_OFFSET}\" count=\"${PAYLOAD_SIZE}\" status=progress",
         "",
-        "echo \"[+] Verified AZ01 Container Magic\"",
-        "echo \"[+] Slicing payload at offset $PAYLOAD_OFFSET ($PAYLOAD_SIZE bytes) -> $OUTPUT_FILE ...\"",
+        "echo \"[*] Computing SHA-1 digest...\"",
+        "CALC_SHA1=$(sha1sum \"${OUT_PAYLOAD}\" | awk '{print $1}')",
+        "echo \"Expected SHA-1 : ${EXPECTED_SHA1}\"",
+        "echo \"Actual SHA-1   : ${CALC_SHA1}\"",
         "",
-        "# High-speed dd slice using byte-exact skip/count flags",
-        "dd if=\"$IMAGE\" of=\"$OUTPUT_FILE\" iflag=skip_bytes,count_bytes bs=64K skip=\"$PAYLOAD_OFFSET\" count=\"$PAYLOAD_SIZE\" status=progress",
-        "",
-        "echo \"[+] Computing SHA-1 digest...\"",
-        "COMPUTED_SHA1=$(sha1sum \"$OUTPUT_FILE\" | awk '{print $1}')",
-        "",
-        "echo \"    Expected SHA-1 : $EXPECTED_SHA1\"",
-        "echo \"    Computed SHA-1 : $COMPUTED_SHA1\"",
-        "",
-        "if [ \"${COMPUTED_SHA1,,}\" = \"${EXPECTED_SHA1,,}\" ]; then",
-        "  echo \"[✓] CHECKSUM VERIFIED: Payload is authentic and intact.\"",
+        "if [[ \"${CALC_SHA1,,}\" == \"${EXPECTED_SHA1,,}\" ]]; then",
+        "  echo \"[✓] PAYLOAD VERIFIED INTACT.\"",
         "else",
-        "  echo \"[!] CHECKSUM MISMATCH: Extracted payload may be corrupt!\"",
+        "  echo \"[!] CHECKSUM MISMATCH DETECTED!\" >&2",
         "  exit 2",
         "fi",
         "",
-        "if [ \"" + compression.replace(/\\/g, "\\\\").replace(/"/g, "\\\"") + "\" = \"xz\" ]; then",
-        "  echo \"[*] Tip: Decompress the XZ rootfs image using:\"",
-        "  echo \"    xz -d -k $OUTPUT_FILE\"",
-        "  echo \"    sudo mount -t ext4 -o loop,ro " + partitionName.replace(/\\/g, "\\\\").replace(/"/g, "\\\"") + ".ext4 /mnt/akai_rootfs\"",
-        "fi"
+        "# Decompress .xz and loop-mount Ext4 rootfs partition on Linux",
+        "echo \"[*] To decompress and mount the Ext4 rootfs partition on Linux:\"",
+        "echo \"    xz -dc \\\"${OUT_PAYLOAD}\\\" > \\\"" + escapeForJsQuoted(partitionName) + ".ext4\\\"\"",
+        "echo \"    sudo mkdir -p /mnt/akai_rootfs && sudo mount -t ext4 -o loop,ro \\\"" + escapeForJsQuoted(partitionName) + ".ext4\\\" /mnt/akai_rootfs\""
       ].join("\n");
     }
 
@@ -2357,23 +2425,47 @@
       const m = activeMetadata || {
         fileName: "MPC-3.4.1.62-Unified-update.img",
         version: "3.4.1.62-MPC-RELEASE",
-        partlOffset: 224,
+        description: "upgrade image",
+        detectedPartlOffset: 224,
         payloadOffset: 300,
         payloadSize: 4096,
         partitionName: "rootfs",
         compression: "xz",
-        expectedHashHex: "0000000000000000000000000000000000000000",
-        targets: ["inmusic,acva2"]
+        expectedHash: "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+        targets: ["inmusic,acv5", "inmusic,acv8", "inmusic,acva", "inmusic,acva2", "inmusic,acvb", "inmusic,acvm", "inmusic,acvr", "inmusic,acv5s"]
       };
-      const outExt = m.compression === "none" ? "img" : m.compression;
-      const cmd = "dd if=\"" + m.fileName + "\" of=\"" + m.partitionName + "." + outExt + "\" iflag=skip_bytes,count_bytes bs=64K skip=" + m.payloadOffset + " count=" + m.payloadSize;
-      document.getElementById("cli-dd-oneliner").textContent = cmd;
+      const partlOff = (m.detectedPartlOffset !== undefined ? m.detectedPartlOffset : m.partlOffset) || 224;
+      const payloadOff = m.payloadOffset || (partlOff + 0x4C);
+      const outExt = m.compression === "none" ? "bin" : (m.compression || "xz");
+      const cmd = "dd if=\"" + m.fileName + "\" of=\"" + m.partitionName + "." + outExt + "\" iflag=skip_bytes,count_bytes bs=64K skip=" + payloadOff + " count=" + m.payloadSize;
+
+      const ddEl = document.getElementById("cli-dd-oneliner");
+      if (ddEl) ddEl.textContent = cmd;
+
+      const subEl = document.getElementById("cli-header-subtitle");
+      if (subEl) {
+        subEl.innerHTML = "Pre-configured Python 3 and Bash scripts synchronized with your active firmware offsets (PARTL @ <span class=\"font-mono text-zinc-200\">0x" + partlOff.toString(16).toUpperCase() + "</span>, Payload @ <span class=\"font-mono text-zinc-200\">0x" + payloadOff.toString(16).toUpperCase() + "</span>).";
+      }
 
       generatedPythonScript = buildEscapedPythonScript(m);
       generatedBashScript = buildEscapedBashScript(m);
 
-      document.getElementById("cli-script-filename").textContent = activeCliLang === "python" ? "az01_tool.py" : "az01_unpack.sh";
-      document.getElementById("cli-code-block").textContent = activeCliLang === "python" ? generatedPythonScript : generatedBashScript;
+      const bannerEl = document.getElementById("cli-file-banner");
+      if (bannerEl) {
+        bannerEl.textContent = activeCliLang === "python"
+          ? "az01_tool.py — Full Unpack, Verify & 8-Byte Aligned Container Builder"
+          : "az01_unpack.sh — POSIX dd Zero-RAM Stream Extractor";
+      }
+
+      const dlBtn = document.getElementById("cli-download-btn");
+      if (dlBtn) {
+        dlBtn.textContent = activeCliLang === "python" ? "Download .py" : "Download .sh";
+      }
+
+      const codeBlockEl = document.getElementById("cli-code-block");
+      if (codeBlockEl) {
+        codeBlockEl.textContent = activeCliLang === "python" ? generatedPythonScript : generatedBashScript;
+      }
     }
 
     function switchCliLang(lang) {
@@ -2381,25 +2473,21 @@
       const btnPy = document.getElementById("cli-btn-python");
       const btnSh = document.getElementById("cli-btn-bash");
       if (btnPy && btnSh) {
-        btnPy.className = lang === "python" ? "px-3.5 py-1.5 rounded text-xs font-medium bg-[#dc2626] text-white cursor-pointer" : "px-3.5 py-1.5 rounded text-xs font-medium text-zinc-400 hover:text-white cursor-pointer";
-        btnSh.className = lang === "bash" ? "px-3.5 py-1.5 rounded text-xs font-medium bg-[#dc2626] text-white cursor-pointer" : "px-3.5 py-1.5 rounded text-xs font-medium text-zinc-400 hover:text-white cursor-pointer";
+        btnPy.className = lang === "python" ? "px-3 py-1.5 text-xs font-medium rounded bg-[#dc2626] text-white cursor-pointer" : "px-3 py-1.5 text-xs font-medium rounded text-zinc-400 hover:text-white cursor-pointer";
+        btnSh.className = lang === "bash" ? "px-3 py-1.5 text-xs font-medium rounded bg-[#dc2626] text-white cursor-pointer" : "px-3 py-1.5 text-xs font-medium rounded text-zinc-400 hover:text-white cursor-pointer";
       }
       renderCliScripts();
     }
 
-    async function copyCliDdCmd() {
-      const cmd = document.getElementById("cli-dd-oneliner").textContent;
-      await navigator.clipboard.writeText(cmd);
-      showToast("Copied dd command to clipboard.", "success");
-    }
-
     async function copyActiveCliScript() {
+      if (!generatedPythonScript) renderCliScripts();
       const code = activeCliLang === "python" ? generatedPythonScript : generatedBashScript;
       await navigator.clipboard.writeText(code);
       showToast("Copied " + (activeCliLang === "python" ? "az01_tool.py" : "az01_unpack.sh") + " to clipboard.", "success");
     }
 
     function downloadActiveCliScript() {
+      if (!generatedPythonScript) renderCliScripts();
       const isPy = activeCliLang === "python";
       const code = isPy ? generatedPythonScript : generatedBashScript;
       const fname = isPy ? "az01_tool.py" : "az01_unpack.sh";
@@ -2421,6 +2509,7 @@
       await initWasmXz();
       switchCCompanionTab("c");
       buildDefaultRootfsTree();
+      renderCliScripts();
       await useSyntheticBuilderPayload();
       renderBuilderTargets();
       updateBuilderGeometry();
